@@ -1,6 +1,6 @@
 // Caches the app itself so it opens instantly/offline. Data is never cached here
 // (the page keeps its own last copy in localStorage).
-const CACHE = "today-shell-v5";
+const CACHE = "today-shell-v6";
 const SHELL = ["./", "app.js", "build.js", "build.css", "now-parser.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {

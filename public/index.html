@@ -12,143 +12,226 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Today">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#FBF7F2">
+<meta name="theme-color" content="#FBF7F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D1A18" media="(prefers-color-scheme: dark)">
 <style>
+  /* Design: agent-desk threads/today-app-design.md (G Dev & Design, 2026-11-13).
+     Fills use the bright colours; text uses the -text versions (all at least 4.5:1, checked). */
   :root {
-    /* Fills use the bright colours; text uses the -text versions (all at least 4.5:1, checked) */
     --bg: #FBF7F2; --card: #FFFFFF; --ink: #2B2520; --soft: #6B6158;
     --line: #EDE6DD; --accent: #D9734E; --accent-soft: #FBE9E1; --accent-text: #A34A28; --on-accent: #FFFFFF;
     --ok: #4F8A6E; --ok-soft: #E3F0E8; --ok-text: #376B52;
     --warn: #C2553A; --warn-soft: #FBE4DD; --warn-text: #A9432B;
     --amber-soft: #FBEFD9; --amber-text: #8A5A0E;
-    --radius: 18px;
+    --bar-bg: rgba(251, 247, 242, .86); --tab-pill: rgba(217, 115, 78, .14); --shadow: 0 -1px 0 var(--line);
+    --tabbar-h: 56px;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#1D1A18; --card:#272320; --ink:#F2ECE6; --soft:#B3A89E;
       --line:#38322D; --accent:#E8906E; --accent-soft:#3A2A23; --accent-text:#F0A285; --on-accent:#1D1A18;
       --ok:#7DB89A; --ok-soft:#22332A; --ok-text:#8CC7A8;
       --warn:#EE8A70; --warn-soft:#3D2620; --warn-text:#F49A82;
-      --amber-soft:#3A2F1C; --amber-text:#E8B866; }
+      --amber-soft:#3A2F1C; --amber-text:#E8B866;
+      --bar-bg: rgba(29, 26, 24, .86); --tab-pill: rgba(232, 144, 110, .18); }
   }
   * { box-sizing: border-box; }
-  html, body { margin:0; background:var(--bg); color:var(--ink);
-    font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -webkit-text-size-adjust: 100%; }
-  main { max-width: 640px; margin: 0 auto;
-    padding: calc(env(safe-area-inset-top) + 22px) 16px calc(env(safe-area-inset-bottom) + 48px); }
+  html { -webkit-text-size-adjust: 100%; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .num, .tnum, .when, .pill, .meta { font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
 
-  /* Header */
-  #head { margin-bottom: 18px; }
-  .hello { font-size: 30px; font-weight: 750; margin: 0; letter-spacing: -0.02em; line-height: 1.15; }
+  /* ---- Slim sticky bar (iOS large-title pattern) ---- */
+  .appbar { position: sticky; top: 0; z-index: 20; background: var(--bar-bg);
+    -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px);
+    padding-top: env(safe-area-inset-top); border-bottom: 1px solid transparent; transition: border-color .15s; }
+  .appbar.scrolled { border-bottom-color: var(--line); }
+  .appbar .bar { height: 44px; display: flex; align-items: center; justify-content: center; }
+  .appbar .bar-title { font-size: 17px; font-weight: 600; transition: opacity .15s; }
+  body[data-tab="today"] .appbar:not(.titled) .bar-title { opacity: 0; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 0 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px); }
+  #setup { padding-top: calc(env(safe-area-inset-top) + 28px); padding-bottom: 40px; }
+
+  /* ---- Type scale ---- */
+  .hello { font-size: 28px; font-weight: 700; margin: 4px 0 0; letter-spacing: -0.02em; line-height: 1.18; }
   .date { color: var(--soft); margin: 4px 0 0; font-size: 15px; }
-  .summary { margin: 8px 0 0; font-size: 17px; }
+  .summary { margin: 10px 0 0; font-size: 17px; }
+  .screen-h { font-size: 20px; font-weight: 600; margin: 12px 0 4px; letter-spacing: -0.01em; }
+  .group-h { font-size: 15px; font-weight: 600; color: var(--soft); margin: 24px 0 4px; }
+  .meta { font-size: 13px; color: var(--soft); }
 
-  /* Sections */
-  section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 16px; margin-bottom: 14px; }
-  section.hero { background: var(--accent-soft); border-color: transparent; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--soft);
-    margin: 0 0 10px; font-weight: 650; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  h2 .count { text-transform: none; letter-spacing: 0; font-weight: 500; }
-
-  /* Number tiles */
-  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 2px 0 4px; }
-  .tile { background: var(--card); border-radius: 14px; padding: 10px 8px 9px; text-align: center; }
-  .tile .num { display: block; font-size: 26px; font-weight: 750; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .tile .lbl { display: block; font-size: 13px; color: var(--soft); line-height: 1.25; margin-top: 2px; }
+  /* ---- Tiles (2x2) ---- */
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 20px 0 4px; }
+  @media (min-width: 520px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+  .tile { display: block; min-height: 72px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; color: inherit; text-decoration: none; font: inherit; text-align: left; width: 100%; cursor: pointer; }
+  .tile .num { display: block; font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .tile .lbl { display: block; font-size: 13px; color: var(--soft); margin-top: 2px; }
   .tile.hot .num { color: var(--warn-text); }
-  @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile:active { background: var(--accent-soft); }
 
-  /* Rows */
-  ul { list-style: none; margin: 0; padding: 0; }
-  .rows > li { padding: 11px 0; border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
-  .hero .rows > li { border-top-color: rgba(0,0,0,.06); }
+  /* ---- Lists ---- */
+  ul, ol { list-style: none; margin: 0; padding: 0; }
+  .rows { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; }
+  .rows > li { padding: 12px 0; border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; min-height: 48px; }
   .rows > li:first-child { border-top: 0; }
-  .hero .rows { margin-top: 10px; }
   .main { flex: 1; min-width: 0; }
   .title { display: block; overflow-wrap: anywhere; }
   .sub { display: block; font-size: 15px; color: var(--soft); overflow-wrap: anywhere; }
-  .side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
-  .when { font-size: 14px; color: var(--soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .empty { color: var(--soft); font-style: italic; padding: 2px 0; }
+  .sub.late { color: var(--warn-text); }
+  .side { flex: 0 0 auto; display: flex; align-items: center; min-height: 24px; }
+  .when { font-size: 15px; color: var(--soft); white-space: nowrap; }
+  ol.top3 { counter-reset: top; }
+  ol.top3 > li { counter-increment: top; }
+  ol.top3 > li::before { content: counter(top); flex: 0 0 24px; height: 24px; border-radius: 12px; background: var(--accent-soft);
+    color: var(--accent-text); font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
 
-  /* Pills */
-  .pill { display: inline-block; font-size: 12.5px; font-weight: 650; line-height: 1; padding: 5px 9px;
+  /* ---- Pills ---- */
+  .pill { display: inline-block; font-size: 13px; font-weight: 600; line-height: 1; padding: 6px 10px;
     border-radius: 999px; white-space: nowrap; background: var(--line); color: var(--ink); }
-  .pill.accent { background: var(--accent-soft); color: var(--accent-text); }
-  .hero .pill.accent { background: var(--card); }
   .pill.warn { background: var(--warn-soft); color: var(--warn-text); }
   .pill.amber { background: var(--amber-soft); color: var(--amber-text); }
-  .pill.ok { background: var(--ok-soft); color: var(--ok-text); }
+  .pill.plain { background: none; color: var(--soft); padding-right: 0; font-weight: 500; }
 
-  /* Notes */
+  /* ---- Waiting cards ---- */
+  .cards { display: grid; gap: 8px; margin-top: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card .who { font-weight: 600; overflow-wrap: anywhere; }
+  .card .what { margin-top: 2px; overflow-wrap: anywhere; }
+  .card .meta { margin-top: 6px; }
+
+  /* ---- Notes ---- */
   .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 12px;
-    padding: 11px 14px; margin-top: 8px; overflow-wrap: anywhere; }
-  .callout:first-of-type { margin-top: 0; }
+    padding: 12px 16px; margin-top: 8px; overflow-wrap: anywhere; }
 
-  /* Notebook links */
-  details.nb { padding: 0; }
-  details.nb > summary { list-style: none; cursor: pointer; padding: 16px; font-size: 13px; text-transform: uppercase;
-    letter-spacing: .07em; color: var(--soft); font-weight: 650; display: flex; justify-content: space-between; }
-  details.nb > summary::-webkit-details-marker { display: none; }
-  details.nb > summary::after { content: "Show"; text-transform: none; letter-spacing: 0; font-weight: 500; }
-  details.nb[open] > summary::after { content: "Hide"; }
-  .links { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 0 16px 16px; }
-  .links a { display: block; text-decoration: none; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
-    border-radius: 12px; padding: 10px 12px; }
-  .links a { min-height: 44px; }
+  .empty { color: var(--soft); text-align: center; padding: 40px 16px; font-size: 17px; }
+  .pane-foot { text-align: center; margin-top: 28px; }
+  .linkbtn { background: none; border: 0; color: var(--soft); font: inherit; font-size: 15px; text-decoration: underline;
+    text-underline-offset: 3px; padding: 12px 16px; min-height: 48px; cursor: pointer; }
 
-  .foot { text-align: center; color: var(--soft); font-size: 13px; margin-top: 18px; }
-  button, .btn { font: inherit; border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer;
-    background: var(--accent-text); color: var(--on-accent); font-weight: 600; width: 100%; min-height: 44px; }
-  .link { background: none; color: var(--soft); width: auto; padding: 8px 10px; min-height: 44px; font-weight: 400;
-    text-decoration: underline; font-size: 13px; }
+  .msg { padding: 12px 16px; border-radius: 12px; background: var(--accent-soft); margin: 12px 0 0; }
+
+  /* ---- Bottom tab bar (Apple HIG / Material 3 navigation bar) ---- */
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bar-bg);
+    -webkit-backdrop-filter: saturate(1.6) blur(16px); backdrop-filter: saturate(1.6) blur(16px);
+    box-shadow: var(--shadow); padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar .tabs { max-width: 640px; margin: 0 auto; height: var(--tabbar-h); display: grid; grid-template-columns: repeat(4, 1fr); }
+  .tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 48px; color: var(--soft); text-decoration: none; font-size: 12px; font-weight: 500; }
+  .tab .ico { width: 56px; height: 30px; border-radius: 15px; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+  .tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tab svg .fillable { fill: none; }
+  .tab[aria-current="page"] { color: var(--accent-text); font-weight: 600; }
+  .tab[aria-current="page"] .ico { background: var(--tab-pill); }
+  .tab[aria-current="page"] svg .fillable { fill: currentColor; }
+  .tab[aria-current="page"] svg .on-fill { stroke: var(--card); }
+  .tab .dot { position: absolute; top: 6px; left: calc(50% + 10px); width: 8px; height: 8px; border-radius: 4px;
+    background: var(--warn); box-shadow: 0 0 0 2px var(--bg); }
+
+  /* ---- About sheet (Notion-style: secondary info behind a tap) ---- */
+  .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .32); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-width: 640px; margin: 0 auto;
+    background: var(--card); border-radius: 16px 16px 0 0; padding: 8px 16px calc(env(safe-area-inset-bottom) + 16px);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, .18); max-height: 85vh; max-height: 85dvh; overflow: auto; overscroll-behavior: contain; }
+  .sheet .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 8px; }
+  .sheet h2 { font-size: 20px; font-weight: 600; margin: 8px 0 6px; }
+  .sheet p { color: var(--soft); font-size: 15px; margin: 0 0 12px; }
+  .sheet .links { display: grid; gap: 8px; margin: 12px 0; }
+  .sheet .links a, .sheet .act { display: flex; align-items: center; min-height: 48px; padding: 0 16px; border-radius: 12px;
+    background: var(--bg); border: 1px solid var(--line); color: var(--ink); text-decoration: none; font: inherit; width: 100%; cursor: pointer; text-align: left; }
+  .sheet .actions { display: grid; gap: 8px; margin-top: 12px; }
+  .sheet .done { margin-top: 12px; }
+
+  /* ---- Setup ---- */
+  #setup .hello { margin-bottom: 4px; }
+  #setup section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 18px; }
+  .btn { font: inherit; border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer; min-height: 48px;
+    background: var(--accent-text); color: var(--on-accent); font-weight: 600; width: 100%; }
   input { font: inherit; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--ink); margin: 4px 0 12px; }
-  label { font-size: 14px; color: var(--soft); }
-  .msg { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); margin-bottom: 14px; }
-  #setup header { margin-bottom: 18px; }
+    background: var(--bg); color: var(--ink); margin: 4px 0 12px; min-height: 48px; }
+  label { font-size: 15px; color: var(--soft); }
+  .foot { text-align: center; color: var(--soft); font-size: 13px; margin-top: 18px; }
+
+  /* ---- Motion ---- */
   .fade-in { animation: fade-in .3s ease-out both; }
+  .fade-tab { animation: fade-in .15s ease-out both; }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .fade-in { animation: none; } }
-  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .fade-in, .fade-tab { animation: none; } .appbar, .bar-title { transition: none; } }
+
+  /* Build animation's Skip button sits just above the tab bar */
+  body .b-skip { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px); }
 </style>
 </head>
-<body>
+<body data-tab="today">
 <noscript><p style="padding:20px">Please turn on JavaScript to use Today.</p></noscript>
-<main>
-  <!-- Setup screen -->
-  <div id="setup" hidden>
-    <header>
-      <p class="hello">Let's get you set up</p>
-      <p class="date">This only happens once.</p>
-    </header>
-    <div id="setupMsg" class="msg" hidden></div>
-    <section>
-      <label for="repo">Your notebook</label>
-      <input id="repo" placeholder="e.g. name/NotebookName" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <label for="key">Your key</label>
-      <input id="key" type="password" placeholder="Paste the key you were sent" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <label for="name">Your name (optional)</label>
-      <input id="name" placeholder="So the page can say hello" autocomplete="given-name">
-      <button id="save">Save and open</button>
-    </section>
-    <p class="foot">Your key stays on this phone only.</p>
-  </div>
 
-  <!-- Dashboard: #head and #board are filled by app.js; [data-b] marks pieces for build.js -->
-  <div id="dash" hidden>
-    <header id="head"></header>
-    <div id="dashMsg" class="msg" hidden role="status"></div>
-    <div id="board"></div>
-    <footer class="foot">
-      <span id="updated"></span><br>
-      <button class="link" id="refresh">Refresh</button>
-      <button class="link" id="replay" hidden>Replay</button>
-      <button class="link" id="reset">Reconnect</button>
-    </footer>
-  </div>
+<!-- Setup screen -->
+<main id="setup" hidden>
+  <p class="hello">Let's get you set up</p>
+  <p class="date">This only happens once.</p>
+  <div id="setupMsg" class="msg" hidden></div>
+  <section>
+    <label for="repo">Your notebook</label>
+    <input id="repo" placeholder="e.g. name/NotebookName" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="key">Your key</label>
+    <input id="key" type="password" placeholder="Paste the key you were sent" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="name">Your name (optional)</label>
+    <input id="name" placeholder="So the page can say hello" autocomplete="given-name">
+    <button class="btn" id="save">Save and open</button>
+  </section>
+  <p class="foot">Your key stays on this phone only.</p>
 </main>
+
+<!-- Dashboard -->
+<div id="dash" hidden>
+  <header class="appbar" id="appbar"><div class="bar"><span class="bar-title" id="barTitle" role="heading" aria-level="1">Today</span></div></header>
+  <main>
+    <div id="dashMsg" class="msg" hidden role="status"></div>
+    <!-- Panes are filled by app.js. [data-b] marks pieces for build.js (Today pane only). -->
+    <div id="pane-today" class="pane" role="region" aria-label="Today"></div>
+    <div id="pane-coming" class="pane" role="region" aria-label="Coming up" hidden></div>
+    <div id="pane-todos" class="pane" role="region" aria-label="To-dos" hidden></div>
+    <div id="pane-waiting" class="pane" role="region" aria-label="Waiting to hear back" hidden></div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <div class="tabs">
+      <a class="tab" href="#today" data-tab="today" aria-current="page">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="fillable" cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></span>
+        <span>Today</span><span class="dot" hidden></span>
+      </a>
+      <a class="tab" href="#coming" data-tab="coming">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="fillable" x="3.5" y="5" width="17" height="15.5" rx="3"/><path class="on-fill" d="M3.5 10h17"/><path d="M8 3v4M16 3v4"/></svg></span>
+        <span>Coming up</span><span class="dot" hidden></span>
+      </a>
+      <a class="tab" href="#todos" data-tab="todos">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="fillable" x="3" y="3.5" width="5" height="5" rx="1.4"/><path class="on-fill" d="M4.3 6.1l1.1 1.1 1.8-2"/><rect x="3" y="10" width="5" height="5" rx="1.4"/><rect x="3" y="16.5" width="5" height="5" rx="1.4"/><path d="M11 6h10M11 12.5h10M11 19h10"/></svg></span>
+        <span>To-dos</span><span class="dot" hidden></span>
+      </a>
+      <a class="tab" href="#waiting" data-tab="waiting">
+        <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fillable" d="M5 4.5h14a2.5 2.5 0 0 1 2.5 2.5v8.5a2.5 2.5 0 0 1-2.5 2.5h-7l-4.5 3.5v-3.5H5a2.5 2.5 0 0 1-2.5-2.5V7A2.5 2.5 0 0 1 5 4.5z"/><path class="on-fill" d="M8 11.3h.01M12 11.3h.01M16 11.3h.01" stroke-width="2.6"/></svg></span>
+        <span>Waiting</span><span class="dot" hidden></span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+    <div class="grab" aria-hidden="true"></div>
+    <h2 id="sheetTitle">About this page</h2>
+    <p>Your assistants keep this page up to date as you tell them things. It checks for changes every time you open it.</p>
+    <div class="links" id="sheetLinks"></div>
+    <div class="actions">
+      <button class="act" id="replay" hidden>Replay the build</button>
+      <button class="act" id="refresh">Check for changes now</button>
+      <button class="act" id="reset">Reconnect</button>
+    </div>
+    <button class="btn done" id="sheetDone">Done</button>
+  </div>
+</div>
 
 <script src="now-parser.js"></script>
 <script src="build.js"></script>

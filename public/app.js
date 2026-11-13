@@ -4,20 +4,24 @@
   if (window.top !== window.self) { document.body.innerHTML = ""; return; }
   var STORE = "today-app-v1";
   var FILE_PATH = "NOW.md";                  // the dashboard file each KB Keeper keeps current
+  var TABS = ["today", "coming", "todos", "waiting"];
+  var TITLES = { today: "Today", coming: "Coming up", todos: "To-dos", waiting: "Waiting to hear back" };
 
   var REPO_RE = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;          // owner/name only
   var PATH_RE = /^(?!.*\.\.)[A-Za-z0-9._\/ -]+$/;              // a file in the repo, no ".."
   var $ = function (id) { return document.getElementById(id); };
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } }
   function save(obj) { try { localStorage.setItem(STORE, JSON.stringify(obj)); } catch (e) {} }
+  function hashTab() { var h = location.hash.slice(1); return TABS.indexOf(h) >= 0 ? h : ""; }
 
-  // ---- One-tap setup links: ...#repo=owner/name&key=xxx (the part after # never leaves the phone)
-  window.addEventListener("hashchange", function () { readSetupLink(); refresh(); });
-  readSetupLink();
+  // ---- One-tap setup links: ...#repo=owner/name&key=xxx (the part after # never leaves the phone).
+  // Tab hashes (#today, #coming, …) are navigation, not setup links.
   function readSetupLink() {
-    if (!location.hash || location.hash.length < 2) return;
+    if (!location.hash || location.hash.length < 2 || hashTab()) return false;
     var p = new URLSearchParams(location.hash.slice(1));
+    if (!p.has("repo") && !p.has("key") && !p.has("demo") && !p.has("name") && !p.has("path")) return false;
     history.replaceState(null, "", location.pathname);   // strip the key from the address bar first
     var cfg = load();
     var repo = (p.get("repo") || "").trim(), key = (p.get("key") || "").trim(), path = (p.get("path") || "").trim();
@@ -32,6 +36,7 @@
     if (path && PATH_RE.test(path)) { cfg.path = path; }
     if (p.get("name")) { cfg.name = p.get("name").trim().slice(0, 40); }
     save(cfg);
+    return true;
   }
 
   // ---- Dates. "Today" is the Singapore date, same rule the KBs use (AGENTS.md).
@@ -44,224 +49,371 @@
   }
   function parseDay(s) { var a = String(s).slice(0, 10).split("-"); return new Date(+a[0], +a[1] - 1, +a[2]); }
   function daysFromToday(s) { return Math.round((parseDay(s) - parseDay(todayStr())) / 86400000); }
-  function niceDay(s) {
-    var n = daysFromToday(s);
-    if (n === 0) return "Today";
-    if (n === 1) return "Tomorrow";
-    if (n === -1) return "Yesterday";
-    var d = parseDay(s);
-    var opts = n > 0 && n < 7 ? { weekday: "short" } : { day: "numeric", month: "short" };
-    return d.toLocaleDateString("en-GB", opts);
+  function fmt(s, opts) { return parseDay(s).toLocaleDateString("en-GB", opts); }
+  function shortDate(s) { return fmt(s, { weekday: "short", day: "numeric", month: "short" }); }   // "Fri 20 Nov"
+  function fmtTime(t) {                                                                               // "15:00" -> "3pm"
+    var m = /^(\d{1,2}):(\d{2})$/.exec(t || ""); if (!m) return "";
+    var h = +m[1], ap = h < 12 ? "am" : "pm"; h = h % 12 || 12;
+    return h + (m[2] === "00" ? "" : ":" + m[2]) + ap;
+  }
+  function dateLabel(start, end, time) {                                                              // "Mon 16 – Wed 18 Nov, 3pm"
+    var s;
+    if (end && end !== start) {
+      var sameMonth = start.slice(0, 7) === end.slice(0, 7);
+      s = (sameMonth ? fmt(start, { weekday: "short", day: "numeric" }) : shortDate(start)) + " – " + shortDate(end);
+    } else s = shortDate(start);
+    return s + (time ? ", " + fmtTime(time) : "");
+  }
+  function inDays(n) { return n <= 0 ? "today" : n === 1 ? "tomorrow" : "in " + n + " days"; }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  // "after 2026-11-23 lottery" -> "after 23 Nov lottery" (no ISO dates in anything people read)
+  function friendlyDates(text) {
+    return String(text).replace(/\b(\d{4}-\d{2}-\d{2})\b/g, function (d) { return fmt(d, { day: "numeric", month: "short" }); });
+  }
+  function updatedText(stamp) {
+    if (!stamp) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(stamp)) {
+      var n = daysFromToday(stamp);
+      return n === 0 ? "Updated today" : n === -1 ? "Updated yesterday" : "Updated on " + fmt(stamp, { day: "numeric", month: "short" });
+    }
+    var t = new Date(stamp); if (isNaN(t)) return "";
+    var min = Math.round((Date.now() - t) / 60000);
+    if (min < 1) return "Updated just now";
+    if (min < 60) return "Updated " + min + " min ago";
+    if (min < 24 * 60) return "Updated " + plural(Math.round(min / 60), "hour", "hours") + " ago";
+    var day = daysFromToday(todayStr(t));
+    return day === -1 ? "Updated yesterday" : "Updated on " + t.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   }
 
+  // ---- HTML helpers. Everything from NOW.md goes through esc().
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-  // ---- HTML helpers. Everything from NOW.md goes through esc().
   function pill(text, tone) { return '<span class="pill ' + (tone || "") + '">' + esc(text) + "</span>"; }
-  function li(title, sub, side, b) {
-    return '<li data-b="' + (b || "box") + '"><span class="main"><span class="title">' + esc(title) + "</span>" +
-      (sub ? '<span class="sub">' + esc(sub) + "</span>" : "") + "</span>" +
+  function row(title, sub, side, opts) {
+    opts = opts || {};
+    return '<li data-b="box"><span class="main"><span class="title">' + esc(title) + "</span>" +
+      (sub ? '<span class="sub' + (opts.late ? " late" : "") + '">' + esc(sub) + "</span>" : "") + "</span>" +
       (side ? '<span class="side">' + side + "</span>" : "") + "</li>";
   }
-  function list(items, emptyText) {
-    return '<ul class="rows">' + (items.length ? items.join("") : '<li class="empty" data-b="type">' + esc(emptyText) + "</li>") + "</ul>";
+  function group(heading, rows, tag) {
+    if (!rows.length) return "";
+    tag = tag || "ul";
+    return '<h2 class="group-h" data-b="type">' + esc(heading) + "</h2>" +
+      "<" + tag + ' class="rows' + (tag === "ol" ? " top3" : "") + '">' + rows.join("") + "</" + tag + ">";
   }
-  function section(heading, inner, opts) {
-    opts = opts || {};
-    return '<section' + (opts.cls ? ' class="' + opts.cls + '"' : "") + ">" +
-      '<h2 data-b="type">' + esc(heading) + (opts.count != null ? ' <span class="count">' + esc(opts.count) + "</span>" : "") + "</h2>" +
-      inner + "</section>";
-  }
-  function inDays(n) {
-    if (n === 0) return "Today";
-    if (n === 1) return "Tomorrow";
-    return "in " + n + " days";
-  }
-  function shortDate(s) {
-    return parseDay(s).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  }
-  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
-  // "after 2026-11-23 lottery" -> "after 23 Nov lottery" (no ISO dates in anything people read)
-  function friendlyDates(text) {
-    return String(text).replace(/\b(\d{4}-\d{2}-\d{2})\b/g, function (d) {
-      return parseDay(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  function empty(text) { return '<p class="empty" data-b="type">' + esc(text) + "</p>"; }
+  var arr = function (x) { return Array.isArray(x) ? x : []; };
+
+  // ---- Model: turn parsed NOW.md into what the tabs need
+  function model(data) {
+    // Coerce everything to the shapes the tabs expect (the JSON path or an old saved copy could be odd).
+    var str = function (x) { return x == null ? "" : String(x); };
+    var DAY = /^\d{4}-\d{2}-\d{2}$/;
+    var todos = arr(data.todos).filter(function (t) { return t && t.text; }).map(function (t) {
+      return { text: str(t.text), priority: str(t.priority), due: DAY.test(t.due) ? t.due : "", tbc: str(t.tbc), detail: str(t.detail) };
     });
+    var events = arr(data.events).filter(function (e) { return e && DAY.test(e.date) && e.text; }).map(function (e) {
+      return { text: str(e.text), date: e.date, end: DAY.test(e.end) ? e.end : "", time: str(e.time), where: str(e.where) };
+    });
+    var waiting = arr(data.waiting).filter(function (w) { return w && w.who; }).map(function (w) {
+      return { who: str(w.who), what: str(w.what), since: DAY.test(w.since) ? w.since : "" };
+    });
+    var notes = arr(data.notes).map(function (n) { return str(typeof n === "string" ? n : n && n.text); }).filter(Boolean);
+    var top = arr(data.top).map(str).filter(Boolean);
+    var endN = function (e) { return daysFromToday(e.end || e.date); };
+
+    var eventsNow = events.filter(function (e) { return daysFromToday(e.date) <= 0 && endN(e) >= 0; })
+      .sort(function (a, b) { return String(a.time || "").localeCompare(String(b.time || "")); });
+    var overdue = todos.filter(function (t) { return t.due && daysFromToday(t.due) < 0; })
+      .sort(function (a, b) { return String(a.due).localeCompare(String(b.due)); });
+    var dueToday = todos.filter(function (t) { return t.due && daysFromToday(t.due) === 0; });
+    var tomorrow = events.filter(function (e) { return daysFromToday(e.date) === 1; })
+      .concat(todos.filter(function (t) { return t.due && daysFromToday(t.due) === 1; }));
+
+    // Coming up: everything from today on (ongoing ranges count as today)
+    var coming = events.filter(function (e) { return endN(e) >= 0; }).map(function (e) {
+      return { n: Math.max(0, daysFromToday(e.date)), key: (daysFromToday(e.date) < 0 ? todayStr() : e.date) + (e.time || ""),
+        text: e.text, when: dateLabel(e.date, e.end, e.time), sub: e.where };
+    }).concat(todos.filter(function (t) { return t.due && daysFromToday(t.due) >= 0; }).map(function (t) {
+      return { n: daysFromToday(t.due), key: t.due + "~", text: t.text, when: shortDate(t.due), sub: "To-do" };
+    })).sort(function (a, b) { return a.key.localeCompare(b.key); });
+
+    var wd = (parseDay(todayStr()).getDay() + 6) % 7;     // Monday = 0
+    var thisWeekEnd = 6 - wd, nextWeekEnd = thisWeekEnd + 7;
+    return {
+      todos: todos, events: events, waiting: waiting, notes: notes, top: top,
+      eventsNow: eventsNow, overdue: overdue, dueToday: dueToday, tomorrow: tomorrow, coming: coming,
+      thisWeekEnd: thisWeekEnd, nextWeekEnd: nextWeekEnd,
+      nowCount: eventsNow.length + overdue.length + dueToday.length,
+      thisWeek: coming.filter(function (x) { return x.n <= thisWeekEnd; }).length,   // same as the "This week" group
+      urgentDot: todos.some(function (t) { return t.priority === "Urgent" && t.due && daysFromToday(t.due) <= 0; }),
+      soonDot: coming.some(function (x) { return x.n <= 1; })
+    };
   }
 
-  // ---- Render
-  var lastRendered = "", pending = null, pendingTimer = 0;
-  var arr = function (x) { return Array.isArray(x) ? x : []; };
+  // ---- Tab: Today
+  function paneToday(m, who) {
+    var h = new Date().getHours();
+    var greet = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    var parts = [];
+    if (m.overdue.length) parts.push(plural(m.overdue.length, "thing is", "things are") + " overdue.");
+    var todayN = m.eventsNow.length + m.dueToday.length;
+    if (todayN) parts.push(plural(todayN, "thing", "things") + " for today.");
+    if (!parts.length) parts.push("Nothing due today.");
+    var nx = m.coming.filter(function (x) { return x.n > 0; })[0];
+    if (nx) parts.push("Next up: " + nx.text.replace(/[.;:,]+$/, "") + " " + inDays(nx.n) + ".");
+    else if (!m.nowCount) parts.push("All clear.");
+
+    var tiles = [
+      { n: m.nowCount, l: "Due today", hot: m.overdue.length > 0, go: "now" },
+      { n: m.thisWeek, l: "This week", go: "coming" },
+      { n: m.todos.length, l: "To-dos", go: "todos" },
+      { n: m.waiting.length, l: "Waiting", go: "waiting" }
+    ].map(function (t) {
+      return '<button class="tile' + (t.hot ? " hot" : "") + '" data-go="' + t.go + '" aria-label="' + esc(t.n + " " + t.l) + '">' +
+        '<span class="num">' + esc(t.n) + '</span><span class="lbl">' + esc(t.l) + "</span></button>";
+    }).join("");
+
+    var nowRows = [];
+    m.eventsNow.forEach(function (e) {
+      var multi = e.end && e.end !== e.date ? "Until " + shortDate(e.end) : "";
+      var at = e.time && daysFromToday(e.date) === 0 ? fmtTime(e.time) : "All day";
+      nowRows.push(row(e.text, [e.where, multi].filter(Boolean).join(" · "), '<span class="when">' + esc(at) + "</span>"));
+    });
+    m.overdue.forEach(function (t) { nowRows.push(row(t.text, "Was due " + shortDate(t.due), "", { late: true })); });
+    m.dueToday.forEach(function (t) { nowRows.push(row(t.text, t.detail, '<span class="when">Today</span>')); });
+    m.tomorrow.forEach(function (x) {
+      var at = x.time ? fmtTime(x.time) : "Tomorrow";
+      nowRows.push(row(x.text, x.date && x.time ? "Tomorrow" : (x.due ? "To-do" : ""), '<span class="when">' + esc(at) + "</span>"));
+    });
+
+    var html = '<header id="head">' +
+      '<h1 class="hello" data-b="type">' + esc(greet + (who ? ", " + who : "")) + "</h1>" +
+      '<p class="date" data-b="type">' + esc(fmt(todayStr(), { weekday: "long", day: "numeric", month: "long" })) + "</p>" +
+      '<p class="summary" data-b="type">' + esc(parts.join(" ")) + "</p></header>" +
+      '<div class="tiles" data-b="measure">' + tiles + "</div>" +
+      group("Top 3", m.top.map(function (t) { return row(t, "", ""); }), "ol") +
+      '<div id="nowList">' + group("Today and tomorrow", nowRows) + "</div>";
+    if (!m.top.length && !nowRows.length) html += empty("Nothing on today. Enjoy it.");
+    if (m.notes.length) {
+      html += '<h2 class="group-h" data-b="type">Notes</h2>' +
+        m.notes.map(function (n) { return '<div class="callout" data-b="card">' + esc(n) + "</div>"; }).join("");
+    }
+    html += '<div class="pane-foot"><p class="meta" id="updated"></p><button class="linkbtn" id="about">About this page</button></div>';
+    return html;
+  }
+
+  // ---- Tab: Coming up (Things-style time groups)
+  function paneComing(m) {
+    if (!m.coming.length) return empty("Nothing coming up. A quiet stretch.");
+    var g = { week: [], next: [], later: [] };
+    m.coming.forEach(function (x) {
+      var r = row(x.text, [x.when, x.sub].filter(Boolean).join(" · "), pill(inDays(x.n), x.n <= 14 ? "amber" : "plain"));
+      (x.n <= m.thisWeekEnd ? g.week : x.n <= m.nextWeekEnd ? g.next : g.later).push(r);
+    });
+    return group("This week", g.week) + group("Next week", g.next) + group("Later", g.later);
+  }
+
+  // ---- Tab: To-dos (priority carried by the group heading, no pills)
+  function paneTodos(m) {
+    if (!m.todos.length) return empty("All clear.");
+    var groups = Object.create(null);
+    groups.Urgent = []; groups.Important = []; groups.Later = []; groups.Other = [];
+    m.todos.slice().sort(function (a, b) { return String(a.due || "9999").localeCompare(String(b.due || "9999")); })
+      .forEach(function (t) {
+        var late = t.due && daysFromToday(t.due) < 0;
+        var sub = t.due ? (late ? "Was due " : "Due ") + shortDate(t.due) : "No date yet";
+        if (!t.due && t.tbc) {
+          var extra = friendlyDates(String(t.tbc).replace(/^TBC\b\s*/i, "").replace(/^\((.*)\)$/, "$1").trim());
+          if (extra) sub += " · " + extra;
+        }
+        if (t.detail) sub += " · " + t.detail;
+        (groups[t.priority] || groups.Other).push(row(t.text, sub, "", { late: late }));
+      });
+    return group("Urgent", groups.Urgent) + group("Important", groups.Important) + group("Later", groups.Later) +
+      group(groups.Urgent.length + groups.Important.length + groups.Later.length ? "Other" : "To-dos", groups.Other);
+  }
+
+  // ---- Tab: Waiting (one card per item, longest wait first)
+  function paneWaiting(m) {
+    if (!m.waiting.length) return empty("Not waiting on anyone.");
+    return '<div class="cards">' + m.waiting.slice().sort(function (a, b) {
+      return String(a.since || "9999").localeCompare(String(b.since || "9999"));
+    }).map(function (w) {
+      var n = w.since ? -daysFromToday(w.since) : null;
+      var asked = n == null ? "" : n <= 0 ? "Asked today" : n === 1 ? "Asked yesterday" : "Asked " + n + " days ago";
+      return '<div class="card" data-b="card"><div class="top"><span class="who">' + esc(w.who) + "</span>" +
+        (n != null && n >= 7 ? pill("No reply yet", "warn") : "") + "</div>" +
+        (w.what ? '<div class="what">' + esc(w.what) + "</div>" : "") +
+        (asked ? '<div class="meta">' + esc(asked) + "</div>" : "") + "</div>";
+    }).join("") + "</div>";
+  }
+
+  // ---- Render all tabs
+  var lastRendered = "", lastData = null, pending = null, pendingTimer = 0;
   function render(data) {
     data = data && typeof data === "object" ? data : {};
+    lastData = data;
     var sig = JSON.stringify(data) + "|" + todayStr();                    // a new day re-renders even if the data is the same
     var B = window.TodayBuild;
-    if (sig === lastRendered && $("board").childNodes.length) return;     // nothing changed: leave the page (and any build) alone
+    if (sig === lastRendered && $("pane-today").childNodes.length) { setUpdated(); return; }
     if (B && B.isRunning()) {
       // Don't cut the build short: show the newer data as soon as it ends.
       pending = data;
       if (!pendingTimer) pendingTimer = setInterval(function () {
         if (window.TodayBuild.isRunning()) return;
         clearInterval(pendingTimer); pendingTimer = 0;
-        var d = pending; pending = null; render(d); fadeIn();
+        var d = pending; pending = null; if (safeRender(d)) fadeIn();
       }, 400);
       return;
     }
+    var m = model(data);
+    var who = load().name || data.name;
+    $("pane-today").innerHTML = paneToday(m, who);
+    $("pane-coming").innerHTML = paneComing(m);
+    $("pane-todos").innerHTML = paneTodos(m);
+    $("pane-waiting").innerHTML = paneWaiting(m);
     lastRendered = sig;
 
-    var now = new Date();
-    var h = now.getHours();
-    var greet = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-    var who = load().name || data.name;
-
-    var todos = arr(data.todos), events = arr(data.events), waiting = arr(data.waiting), notes = arr(data.notes);
-    var top = arr(data.top);
-    var rank = { Urgent: 0, Important: 1, Later: 3 };
-    var r = function (t) { return rank[t.priority] == null ? 2 : rank[t.priority]; };
-    var onNow = function (e) {
-      if (!e.date) return false;
-      var a = daysFromToday(e.date), b = e.end ? daysFromToday(e.end) : a;
-      return a <= 0 && b >= 0;
-    };
-
-    var eventsNow = events.filter(onNow).sort(function (a, b) { return String(a.time || "").localeCompare(String(b.time || "")); });
-    var overdue = todos.filter(function (t) { return t.due && daysFromToday(t.due) < 0; })
-      .sort(function (a, b) { return String(a.due).localeCompare(String(b.due)); });
-    var dueToday = todos.filter(function (t) { return t.due && daysFromToday(t.due) === 0; });
-
-    var upcoming = []
-      .concat(events.filter(function (e) { return e.date && daysFromToday(e.date) > 0; }).map(function (e) {
-        var until = e.end && e.end !== e.date ? "until " + shortDate(e.end) : "";
-        return { d: e.date, t: e.time, text: e.text, sub: [e.where, until].filter(Boolean).join(" · ") };
-      }))
-      .concat(todos.filter(function (t) { return t.due && daysFromToday(t.due) > 0; })
-        .map(function (t) { return { d: t.due, text: t.text, sub: "To-do" + (t.priority ? " · " + t.priority : ""), todo: true }; }))
-      .sort(function (a, b) { return (a.d + (a.t || "")).localeCompare(b.d + (b.t || "")); });
-    var thisWeek = upcoming.filter(function (x) { return daysFromToday(x.d) <= 7; }).length;
-    var nowCount = eventsNow.length + overdue.length + dueToday.length;
-
-    // Header + plain-words summary
-    var parts = [];
-    if (overdue.length) parts.push(plural(overdue.length, "thing is", "things are") + " overdue.");
-    if (eventsNow.length + dueToday.length) parts.push(plural(eventsNow.length + dueToday.length, "thing", "things") + " for today.");
-    if (!parts.length) parts.push("Nothing due today.");
-    if (upcoming.length) { var nx = upcoming[0]; parts.push("Next up: " + nx.text.replace(/[.;:,]+$/, "") + " " + inDays(daysFromToday(nx.d)).toLowerCase() + "."); }
-    else if (!nowCount) parts.push("All clear.");
-    $("head").innerHTML =
-      '<h1 class="hello" data-b="type">' + esc(greet + (who ? ", " + who : "")) + "</h1>" +
-      '<p class="date" data-b="type">' + esc(parseDay(todayStr()).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })) + "</p>" +
-      '<p class="summary" data-b="type">' + esc(parts.join(" ")) + "</p>";
-
-    // Today: tiles + only what needs doing now
-    var tiles = [
-      { n: nowCount, l: "Due today", hot: overdue.length > 0 },
-      { n: thisWeek, l: "This week" },
-      { n: todos.length, l: "To-dos" },
-      { n: waiting.length, l: "Waiting to hear back" }
-    ].map(function (t) {
-      return '<div class="tile' + (t.hot ? " hot" : "") + '"><span class="num">' + esc(t.n) + '</span><span class="lbl">' + esc(t.l) + "</span></div>";
-    }).join("");
-    var nowRows = [];
-    top.forEach(function (t) { nowRows.push(li(t, "", pill("Top 3", "accent"))); });
-    eventsNow.forEach(function (e) {
-      var multi = e.end && e.end !== e.date ? "until " + shortDate(e.end) : "";
-      var at = e.time && daysFromToday(e.date) === 0 ? e.time : "All day";
-      nowRows.push(li(e.text, [e.where, multi].filter(Boolean).join(" · "), '<span class="when">' + esc(at) + "</span>"));
+    setDot("todos", m.urgentDot);
+    setDot("coming", m.soonDot);
+    setUpdated();
+    $("about").onclick = openSheet;
+    [].forEach.call($("pane-today").querySelectorAll(".tile"), function (b) {
+      b.onclick = function () {
+        var go = b.getAttribute("data-go");
+        if (go === "now") { var el = $("nowList"); if (el && el.firstChild) el.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" }); }
+        else location.hash = go;
+      };
     });
-    overdue.forEach(function (t) { nowRows.push(li(t.text, "Was due " + shortDate(t.due), pill("Overdue", "warn"))); });
-    dueToday.forEach(function (t) { nowRows.push(li(t.text, t.detail, pill("Due today", "accent"))); });
-    var todayInner = '<div class="tiles" data-b="measure">' + tiles + "</div>" +
-      (nowRows.length ? list(nowRows) : "");
-
-    // Coming up: every future date, amber within two weeks
-    var comingRows = upcoming.map(function (x) {
-      var n = daysFromToday(x.d);
-      var when = shortDate(x.d) + (x.t ? " · " + x.t : "");
-      return li(x.text, [when, x.sub].filter(Boolean).join(" · "), pill(inDays(n), n <= 14 ? "amber" : ""));
-    });
-
-    // To-dos: everything open, most important first, dated ones by date
-    var todoRows = todos.slice().sort(function (a, b) {
-      return (r(a) - r(b)) || String(a.due || "9999").localeCompare(String(b.due || "9999"));
-    }).map(function (t) {
-      var sub = t.due ? (daysFromToday(t.due) < 0 ? "Was due " : "Due ") + shortDate(t.due)
-        : t.tbc ? friendlyDates(String(t.tbc).replace(/^TBC\b\s*/i, "Date to be confirmed ").trim()) : "Anytime";
-      if (t.detail) sub += " · " + t.detail;
-      var tone = t.priority === "Urgent" ? "warn" : t.priority === "Important" ? "accent" : "";
-      return li(t.text, sub, t.priority ? pill(t.priority, tone) : "");
-    });
-
-    // Waiting on
-    var waitRows = waiting.map(function (w) {
-      var n = w.since ? -daysFromToday(w.since) : null;
-      var asked = n == null ? "" : n <= 0 ? "asked today" : n === 1 ? "asked yesterday" : "asked " + n + " days ago";
-      var status = n != null && n >= 7 ? pill("No reply yet", "warn") : pill("Waiting");
-      return li(w.who, [w.what, asked].filter(Boolean).join(" · "), status, "card");
-    });
-
-    var html = section("Today", todayInner, { cls: "hero" }) +
-      section("Coming up", list(comingRows, "Nothing coming up."), { count: upcoming.length ? upcoming.length : null }) +
-      section("To-dos", list(todoRows, "No to-dos. Nice."), { count: todos.length ? todos.length : null }) +
-      section("Waiting to hear back", list(waitRows, "Not waiting on anyone."), { count: waiting.length ? waiting.length : null });
-    if (notes.length) {
-      html += section("Notes", notes.map(function (n) {
-        return '<div class="callout" data-b="card">' + esc(typeof n === "string" ? n : n.text) + "</div>";
-      }).join(""));
-    }
-    var cfg = load();
-    if (!cfg.demo && cfg.repo && REPO_RE.test(cfg.repo)) {
-      var base = "https://github.com/" + cfg.repo;
-      var links = [["Everything saved", base], ["Projects", base + "/tree/main/projects"], ["Decisions", base + "/tree/main/decisions"], ["Today's list", base + "/blob/main/NOW.md"]];
-      html += '<details class="nb" data-b="box"><summary>Behind the scenes</summary><div class="links">' + links.map(function (l) {
-        return '<a href="' + esc(l[1]) + '" target="_blank" rel="noopener noreferrer">' + esc(l[0]) + "</a>";
-      }).join("") + "</div></details>";
-    }
-    $("board").innerHTML = html;
-
-    var stamp = data.changed || data.updated;
-    $("updated").textContent = "";
-    if (stamp) {
-      var dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(stamp);
-      var u = dateOnly ? parseDay(stamp) : new Date(stamp);
-      $("updated").textContent = isNaN(u) ? "" : "Last updated " + (dateOnly ? niceDay(stamp)
-        : u.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }));
-    }
-
+    fillSheetLinks();
+    onScroll();
     playBuild();
   }
+  function setUpdated() { var u = $("updated"); if (u && lastData) u.textContent = updatedText(lastData.changed || lastData.updated); }
+  function setDot(tab, on) {
+    var a = document.querySelector('.tab[data-tab="' + tab + '"]'); if (!a) return;
+    a.querySelector(".dot").hidden = !on;
+    var label = (tab === "todos" ? "To-dos" : "Coming up") + (on ? (tab === "todos" ? ", something urgent is due" : ", something today or tomorrow") : "");
+    a.setAttribute("aria-label", label);
+  }
 
-  // The build animation (design agreed in agent-desk threads/today-app-design.md):
-  // full build on the first open of the day; later opens just fade in, with a small Replay button.
+  // ---- Tabs
+  var current = "today", scrolls = {};
+  function showTab(name, opts) {
+    opts = opts || {};
+    if (TABS.indexOf(name) < 0) name = "today";
+    var B = window.TodayBuild;
+    if (name !== "today" && B && B.isRunning()) B.finish();             // other tabs always show instantly
+    if (name === current && !opts.force) return;
+    scrolls[current] = window.scrollY;
+    current = name;
+    document.body.setAttribute("data-tab", name);
+    TABS.forEach(function (t) {
+      $("pane-" + t).hidden = t !== name;
+      var a = document.querySelector('.tab[data-tab="' + t + '"]');
+      if (t === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    $("barTitle").textContent = TITLES[name];
+    // On Today the big greeting is the page heading; elsewhere the bar title is.
+    if (name === "today") $("barTitle").setAttribute("aria-hidden", "true"); else $("barTitle").removeAttribute("aria-hidden");
+    var pane = $("pane-" + name);
+    if (!calm && !opts.force) { pane.classList.remove("fade-tab"); void pane.offsetWidth; pane.classList.add("fade-tab"); }
+    window.scrollTo(0, scrolls[name] || 0);
+    onScroll();
+  }
+  [].forEach.call(document.querySelectorAll(".tab"), function (a) {
+    a.addEventListener("click", function (e) {
+      if (a.getAttribute("data-tab") === current) {                      // tapping the current tab scrolls to the top
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" });
+      }
+    });
+  });
+
+  // Slim bar: hairline once content is under it; on Today the title appears once the big greeting scrolls away.
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      ticking = false;
+      var y = window.scrollY;
+      $("appbar").classList.toggle("scrolled", y > 2);
+      var h1 = document.querySelector("#pane-today .hello");
+      var titled = current !== "today" || (h1 && y > h1.offsetTop + h1.offsetHeight - 44);
+      $("appbar").classList.toggle("titled", !!titled);
+    });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  // ---- About sheet
+  var lastFocus = null;
+  function openSheet() {
+    lastFocus = document.activeElement;
+    $("scrim").hidden = false; $("sheet").hidden = false;
+    $("replay").hidden = !window.TodayBuild || calm;
+    setInert(true);
+    $("sheetDone").focus();
+  }
+  // While the sheet is open, the page behind it can't be focused or read out.
+  function setInert(on) {
+    [$("appbar"), document.querySelector("#dash > main"), document.querySelector(".tabbar")].forEach(function (el) {
+      if (!el) return;
+      if (on) { el.setAttribute("inert", ""); el.setAttribute("aria-hidden", "true"); }
+      else { el.removeAttribute("inert"); el.removeAttribute("aria-hidden"); }
+    });
+  }
+  function closeSheet() {
+    if ($("sheet").hidden) return;
+    $("scrim").hidden = true; $("sheet").hidden = true;
+    setInert(false);
+    var back = lastFocus && document.contains(lastFocus) ? lastFocus : $("about");   // the page may have re-rendered meanwhile
+    if (back && back.focus) back.focus();
+  }
+  function fillSheetLinks() {
+    var cfg = load(), box = $("sheetLinks");
+    if (cfg.demo || !cfg.repo || !REPO_RE.test(cfg.repo)) { box.innerHTML = ""; box.hidden = true; return; }
+    var base = "https://github.com/" + cfg.repo;
+    var links = [["Everything saved", base], ["Projects", base + "/tree/main/projects"], ["Decisions", base + "/tree/main/decisions"], ["Today's list", base + "/blob/main/NOW.md"]];
+    box.innerHTML = links.map(function (l) {
+      return '<a href="' + esc(l[1]) + '" target="_blank" rel="noopener noreferrer">' + esc(l[0]) + "</a>";
+    }).join("");
+    box.hidden = false;
+  }
+  $("scrim").onclick = closeSheet;
+  $("sheetDone").onclick = closeSheet;
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  // ---- The build animation (agent-desk threads/today-app-design.md): first open of the day, Today tab only.
   var built = false;
-  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function startBuild() {
     var B = window.TodayBuild;
-    // A running fade-in animation would override the build's hiding, so drop it first.
-    ["head", "board"].forEach(function (id) { $(id).classList.remove("fade-in"); });
-    try { B.start($("dash"), { speed: 1 }); } catch (e) { try { B.finish(); } catch (e2) {} }
+    $("pane-today").classList.remove("fade-in", "fade-tab");           // a running fade would override the build's hiding
+    try { B.start($("pane-today"), { speed: 1 }); } catch (e) { try { B.finish(); } catch (e2) {} }
   }
   function playBuild() {
     var B = window.TodayBuild;
     if (built || $("dash").hidden) return;
     built = true;
-    $("replay").hidden = !B || calm;
-    if (!B || calm) return;
+    if (!B || calm || current !== "today") return;
     var cfg = load(), day = todayStr();
     if (cfg.builtOn !== day) { cfg.builtOn = day; save(cfg); startBuild(); return; }
     fadeIn();
   }
   function fadeIn() {
     if (calm) return;
-    ["head", "board"].forEach(function (id) { var el = $(id); el.classList.remove("fade-in"); void el.offsetWidth; el.classList.add("fade-in"); });
+    var el = $("pane-today"); el.classList.remove("fade-in"); void el.offsetWidth; el.classList.add("fade-in");
   }
 
   function showMsg(text) { var m = $("dashMsg"); m.textContent = text; m.hidden = !text; }
 
   // ---- Fetch from the private GitHub notebook
   function toData(text) {
-    var t = String(text || "").replace(/^\uFEFF/, "");
+    var t = String(text || "").replace(/^﻿/, "");
     return /^\s*\{/.test(t) ? JSON.parse(t) : window.parseNow(t);   // NOW.md, or a JSON summary if path points at one
   }
   function api(cfg, path, accept) {
@@ -313,16 +465,17 @@
     }).catch(function (err) {
       if (seq !== loadSeq) return;
       var k = err && err.kind;
-      if (k === "key") showMsg("Your key has stopped working. Tap “Reconnect” below and paste a new one.");
-      else if (k === "noaccess") showMsg("Your key can't open this notebook yet. It needs read access to it — once that's fixed, tap “Refresh” below.");
+      if (k === "key") showMsg("Your key has stopped working. Open “About this page” at the bottom of Today and tap Reconnect.");
+      else if (k === "noaccess") showMsg("Your key can't open this notebook yet. It needs read access to it — once that's fixed, reopen the app.");
       else if (k === "missing") showMsg("Your page isn't ready yet. Tell your bot something and check back soon.");
       else showMsg(cfg.last ? "Can't connect right now, so this is your last saved view." : "Can't connect right now. Check your internet and try again.");
-      // No saved copy: show only the message. An empty page would wrongly say "All clear".
+      if (!cfg.last && k === "key") openSheet();
     });
   }
 
   function showSetup(msg) {
     if (window.TodayBuild) window.TodayBuild.finish();   // never leave the build overlay over the setup screen
+    closeSheet();
     var cfg = load();
     $("dash").hidden = true; $("setup").hidden = false;
     $("repo").value = cfg.repo || "";
@@ -342,14 +495,28 @@
     $("key").value = "";
     refresh();
   };
-  $("refresh").onclick = refresh;
-  $("replay").onclick = function () { var B = window.TodayBuild; if (!B) return; B.finish(); window.scrollTo(0, 0); startBuild(); };
+  $("refresh").onclick = function () { closeSheet(); refresh(); };
+  $("replay").onclick = function () {
+    var B = window.TodayBuild; if (!B) return;
+    closeSheet(); B.finish();
+    if (current !== "today") location.hash = "today";
+    window.scrollTo(0, 0); startBuild();
+  };
   // Reconnect forgets the key and the saved copy of the page.
   $("reset").onclick = function () { var c = load(); delete c.key; delete c.demo; delete c.last; save(c); showSetup(); };
 
+  window.addEventListener("hashchange", function () {
+    var t = hashTab();
+    if (t) { showTab(t); return; }
+    if (readSetupLink()) { showTab("today"); refresh(); return; }
+    showTab("today");                                                    // Back to the bare page, or an unknown hash
+  });
   // Only re-check while the dashboard is showing, so switching apps mid-setup (to copy the key) keeps what was typed.
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !$("dash").hidden) refresh(); });
 
+  // ---- Start: setup link first, then Today by default (a tab hash is kept on reload).
+  readSetupLink();
+  showTab(hashTab() || "today", { force: true });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
   refresh();
 })();
