@@ -2,12 +2,12 @@
 // Forgiving on purpose: KB Keepers write slightly different line styles.
 //
 //   ## Top 3 today     - anything
-//   ## To-do           - [ ] Task — priority: Important — area: Personal — due: 2026-12-22
-//                      - [ ] Task — Important · Personal · due 2026-12-22
+//   ## To-do           - [ ] Task — priority: Important — area: Personal — due: 2026-01-05
+//                      - [ ] Task — Important · Personal · due 2026-01-05
 //                      (due: TBC, or no due at all, means "no date yet"; ticked [x] lines are skipped)
-//   ## Important dates - 2026-12-21 — 18:00 van pickup      (time may lead the text)
-//                      - 2026-12-22 to 2026-12-23 — Yushan hike
-//   ## Waiting on      - Who — what — since 2026-11-02
+//   ## Important dates - 2026-01-05 — 18:00 dinner          (time may lead the text)
+//                      - 2026-01-10 to 2026-01-12 — Weekend away
+//   ## Waiting on      - Who — what — since 2026-01-02
 //   ## Notes           - anything
 (function (root) {
   "use strict";
@@ -17,7 +17,7 @@
   var META = /^(priority|area|due|urgent|important|later)\b/i;
 
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  // "projects/taiwan-trip-2026-12" -> "Taiwan trip (Dec 2026)"
+  // "projects/beach-trip-2026-12" -> "Beach trip (Dec 2026)"
   function noteName(path) {
     var n = path.split("/").pop().replace(/\.md$/, ""), when = "";
     var ym = /-(\d{4})-(\d{2})(?:-\d{2})?$/.exec(n);
@@ -83,7 +83,7 @@
       if (due) {
         var d = DATE.exec(due[1]);
         if (d && /^\d{4}-\d{2}-\d{2}$/.test(due[1].trim())) t.due = d[0];
-        else if (due[1].trim()) t.tbc = tidy(due[1]);          // "TBC", "TBC (after 2026-11-23 lottery)"
+        else if (due[1].trim()) t.tbc = tidy(due[1]);          // "TBC", "TBC (after the 5th)"
         return;
       }
       var pr = /^(?:priority:?\s*)?(urgent|important|later)\b/i.exec(m);
