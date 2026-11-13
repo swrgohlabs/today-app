@@ -281,7 +281,13 @@
     var file = api(cfg, "contents/" + path.split("/").map(encodeURIComponent).join("/") + "?t=" + Date.now(), "application/vnd.github.raw+json")
       .then(function (r) {
         if (r.status === 401 || r.status === 403) throw { kind: "key" };
-        if (r.status === 404) throw { kind: "missing" };
+        if (r.status === 404) {
+          // GitHub says "not found" both when the file is missing and when the key can't see the repo at all.
+          return fetch("https://api.github.com/repos/" + cfg.repo, {
+            headers: { "Authorization": "Bearer " + cfg.key, "Accept": "application/vnd.github+json" }, cache: "no-store"
+          }).then(function (rr) { throw { kind: rr.status === 404 ? "noaccess" : "missing" }; },
+                  function () { throw { kind: "missing" }; });
+        }
         if (!r.ok) throw { kind: "other" };
         return r.text();
       }).then(toData);
@@ -308,9 +314,10 @@
       if (seq !== loadSeq) return;
       var k = err && err.kind;
       if (k === "key") showMsg("Your key has stopped working. Tap “Reconnect” below and paste a new one.");
+      else if (k === "noaccess") showMsg("Your key can't open this notebook yet. It needs read access to it — once that's fixed, tap “Refresh” below.");
       else if (k === "missing") showMsg("Your page isn't ready yet. Tell your bot something and check back soon.");
       else showMsg(cfg.last ? "Can't connect right now, so this is your last saved view." : "Can't connect right now. Check your internet and try again.");
-      if (!cfg.last && k !== "key") render({});
+      // No saved copy: show only the message. An empty page would wrongly say "All clear".
     });
   }
 
