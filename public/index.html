@@ -7,6 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <title>Today</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="build.css">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Today">
@@ -14,45 +15,102 @@
 <meta name="theme-color" content="#FBF7F2">
 <style>
   :root {
-    --bg: #FBF7F2; --card: #FFFFFF; --ink: #2B2622; --soft: #7A7068;
-    --line: #EDE6DD; --accent: #D9734E; --accent-soft: #FBE9E1;
-    --ok: #4F8A6E; --warn: #C2553A;
+    /* Fills use the bright colours; text uses the -text versions (all at least 4.5:1, checked) */
+    --bg: #FBF7F2; --card: #FFFFFF; --ink: #2B2520; --soft: #6B6158;
+    --line: #EDE6DD; --accent: #D9734E; --accent-soft: #FBE9E1; --accent-text: #A34A28; --on-accent: #FFFFFF;
+    --ok: #4F8A6E; --ok-soft: #E3F0E8; --ok-text: #376B52;
+    --warn: #C2553A; --warn-soft: #FBE4DD; --warn-text: #A9432B;
+    --amber-soft: #FBEFD9; --amber-text: #8A5A0E;
+    --radius: 18px;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#1D1A18; --card:#272320; --ink:#F2ECE6; --soft:#A79C92;
-      --line:#38322D; --accent:#E8906E; --accent-soft:#3A2A23; --ok:#7DB89A; --warn:#EE8A70; }
+    :root { --bg:#1D1A18; --card:#272320; --ink:#F2ECE6; --soft:#B3A89E;
+      --line:#38322D; --accent:#E8906E; --accent-soft:#3A2A23; --accent-text:#F0A285; --on-accent:#1D1A18;
+      --ok:#7DB89A; --ok-soft:#22332A; --ok-text:#8CC7A8;
+      --warn:#EE8A70; --warn-soft:#3D2620; --warn-text:#F49A82;
+      --amber-soft:#3A2F1C; --amber-text:#E8B866; }
   }
   * { box-sizing: border-box; }
   html, body { margin:0; background:var(--bg); color:var(--ink);
-    font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 560px; margin: 0 auto;
-    padding: calc(env(safe-area-inset-top) + 20px) 18px calc(env(safe-area-inset-bottom) + 40px); }
-  header { margin-bottom: 18px; }
-  .hello { font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
-  .date { color: var(--soft); margin: 2px 0 0; }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-    padding: 14px 16px; margin-bottom: 14px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft);
-    margin: 0 0 8px; font-weight: 600; }
+    font: 17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%; }
+  main { max-width: 640px; margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 22px) 16px calc(env(safe-area-inset-bottom) + 48px); }
+
+  /* Header */
+  #head { margin-bottom: 18px; }
+  .hello { font-size: 30px; font-weight: 750; margin: 0; letter-spacing: -0.02em; line-height: 1.15; }
+  .date { color: var(--soft); margin: 4px 0 0; font-size: 15px; }
+  .summary { margin: 8px 0 0; font-size: 17px; }
+
+  /* Sections */
+  section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px; }
+  section.hero { background: var(--accent-soft); border-color: transparent; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--soft);
+    margin: 0 0 10px; font-weight: 650; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h2 .count { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+  /* Number tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 2px 0 4px; }
+  .tile { background: var(--card); border-radius: 14px; padding: 10px 8px 9px; text-align: center; }
+  .tile .num { display: block; font-size: 26px; font-weight: 750; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .lbl { display: block; font-size: 13px; color: var(--soft); line-height: 1.25; margin-top: 2px; }
+  .tile.hot .num { color: var(--warn-text); }
+  @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+
+  /* Rows */
   ul { list-style: none; margin: 0; padding: 0; }
-  li { padding: 9px 0; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; }
-  li:first-child { border-top: 0; }
-  .when { flex: 0 0 auto; min-width: 64px; font-size: 14px; color: var(--soft); font-variant-numeric: tabular-nums; }
-  .when.late { color: var(--warn); font-weight: 600; }
-  .when.now { color: var(--accent); font-weight: 600; }
-  .what { flex: 1; }
-  .sub { display:block; font-size: 14px; color: var(--soft); }
-  .empty { color: var(--soft); font-style: italic; padding: 4px 0; }
-  .hero { background: var(--accent-soft); border-color: transparent; }
+  .rows > li { padding: 11px 0; border-top: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
+  .hero .rows > li { border-top-color: rgba(0,0,0,.06); }
+  .rows > li:first-child { border-top: 0; }
+  .hero .rows { margin-top: 10px; }
+  .main { flex: 1; min-width: 0; }
+  .title { display: block; overflow-wrap: anywhere; }
+  .sub { display: block; font-size: 15px; color: var(--soft); overflow-wrap: anywhere; }
+  .side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+  .when { font-size: 14px; color: var(--soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .empty { color: var(--soft); font-style: italic; padding: 2px 0; }
+
+  /* Pills */
+  .pill { display: inline-block; font-size: 12.5px; font-weight: 650; line-height: 1; padding: 5px 9px;
+    border-radius: 999px; white-space: nowrap; background: var(--line); color: var(--ink); }
+  .pill.accent { background: var(--accent-soft); color: var(--accent-text); }
+  .hero .pill.accent { background: var(--card); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn-text); }
+  .pill.amber { background: var(--amber-soft); color: var(--amber-text); }
+  .pill.ok { background: var(--ok-soft); color: var(--ok-text); }
+
+  /* Notes */
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 12px;
+    padding: 11px 14px; margin-top: 8px; overflow-wrap: anywhere; }
+  .callout:first-of-type { margin-top: 0; }
+
+  /* Notebook links */
+  details.nb { padding: 0; }
+  details.nb > summary { list-style: none; cursor: pointer; padding: 16px; font-size: 13px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--soft); font-weight: 650; display: flex; justify-content: space-between; }
+  details.nb > summary::-webkit-details-marker { display: none; }
+  details.nb > summary::after { content: "Show"; text-transform: none; letter-spacing: 0; font-weight: 500; }
+  details.nb[open] > summary::after { content: "Hide"; }
+  .links { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 0 16px 16px; }
+  .links a { display: block; text-decoration: none; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; }
+  .links a { min-height: 44px; }
+
   .foot { text-align: center; color: var(--soft); font-size: 13px; margin-top: 18px; }
   button, .btn { font: inherit; border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer;
-    background: var(--accent); color: #fff; font-weight: 600; width: 100%; }
-  .link { background: none; color: var(--soft); width: auto; padding: 6px; font-weight: 400;
+    background: var(--accent-text); color: var(--on-accent); font-weight: 600; width: 100%; min-height: 44px; }
+  .link { background: none; color: var(--soft); width: auto; padding: 8px 10px; min-height: 44px; font-weight: 400;
     text-decoration: underline; font-size: 13px; }
   input { font: inherit; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line);
     background: var(--bg); color: var(--ink); margin: 4px 0 12px; }
   label { font-size: 14px; color: var(--soft); }
   .msg { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); margin-bottom: 14px; }
+  #setup header { margin-bottom: 18px; }
+  .fade-in { animation: fade-in .3s ease-out both; }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .fade-in { animation: none; } }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -78,40 +136,22 @@
     <p class="foot">Your key stays on this phone only.</p>
   </div>
 
-  <!-- Dashboard -->
+  <!-- Dashboard: #head and #board are filled by app.js; [data-b] marks pieces for build.js -->
   <div id="dash" hidden>
-    <header>
-      <p class="hello" id="hello">Good morning</p>
-      <p class="date" id="date"></p>
-    </header>
-    <div id="dashMsg" class="msg" hidden></div>
-
-    <section class="hero">
-      <h2>Today</h2>
-      <ul id="today"></ul>
-    </section>
-    <section>
-      <h2>Waiting on</h2>
-      <ul id="waiting"></ul>
-    </section>
-    <section>
-      <h2>Coming up</h2>
-      <ul id="coming"></ul>
-    </section>
-    <section id="notesWrap">
-      <h2>Notes</h2>
-      <ul id="notes"></ul>
-    </section>
-
-    <p class="foot">
+    <header id="head"></header>
+    <div id="dashMsg" class="msg" hidden role="status"></div>
+    <div id="board"></div>
+    <footer class="foot">
       <span id="updated"></span><br>
       <button class="link" id="refresh">Refresh</button>
+      <button class="link" id="replay" hidden>Replay</button>
       <button class="link" id="reset">Reconnect</button>
-    </p>
+    </footer>
   </div>
 </main>
 
 <script src="now-parser.js"></script>
+<script src="build.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

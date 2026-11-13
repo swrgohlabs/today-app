@@ -1,0 +1,125 @@
+/* build.css - multi-cursor build animation (see build.js). Everything is prefixed b-. */
+:root {
+  --b-a1: #E5484D;  /* Planner    red     */
+  --b-a2: #F76B15;  /* Coder      orange  */
+  --b-a3: #C99A06;  /* Designer   gold    */
+  --b-a4: #30A46C;  /* Reviewer   green   */
+  --b-a5: #12A594;  /* Writer     teal    */
+  --b-a6: #0D9BD6;  /* Researcher cyan    */
+  --b-a7: #3E63DD;  /* Tester     blue    */
+  --b-a8: #8E4EC6;  /* Stylist    purple  */
+  --b-a9: #D6409F;  /* Linter     pink    */
+  --b-a10: #6BA30F; /* Editor     lime    */
+  --b-a11: #6E56CF; /* Builder    violet  */
+  --b-a12: #B45309; /* Scout      rust    */
+  --b-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --b-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Real pieces waiting to be built: invisible but keep their box and stay in the a11y tree. */
+.b-wait { opacity: 0 !important; }
+.b-dragging { cursor: grabbing; filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .18)); }
+.b-drag-on, .b-drag-on * { -webkit-user-select: none !important; user-select: none !important; }
+
+/* Overlay: document-positioned, clipped, never interactive. */
+.b-overlay {
+  position: absolute; top: 0; left: 0; width: 0; height: 0;
+  overflow: hidden; pointer-events: none; z-index: 2147483000;
+  transition: opacity .45s ease;
+}
+.b-overlay * { pointer-events: none; }
+.b-overlay.b-out { opacity: 0; }
+.b-fixed { position: fixed; top: 0; left: 0; width: 0; height: 0; pointer-events: none; z-index: 2147483001; }
+
+.b-ghost {
+  position: absolute; box-sizing: border-box;
+  border: 1.5px dashed var(--soft, #9a8f86); border-radius: 10px;
+  opacity: .45; transition: opacity .3s ease, border-color .2s ease;
+}
+.b-ghost.b-on { border-color: var(--b-c); opacity: .9; }
+.b-ghost.b-gone { opacity: 0; }
+
+.b-agent { position: absolute; top: 0; left: 0; will-change: transform; }
+.b-spark {
+  position: absolute; left: -10px; top: -10px; width: 20px; height: 20px;
+  fill: var(--b-c); filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .3));
+  transform-origin: 50% 50%;
+  animation: b-spin 1.1s linear infinite; animation-play-state: paused;
+}
+.b-busy .b-spark { animation-play-state: running; }
+.b-label {
+  position: absolute; left: 9px; top: 9px; white-space: nowrap;
+  background: var(--b-c, var(--accent, #D9734E)); color: #fff;
+  font: 600 11px/1 var(--b-ui); letter-spacing: .01em;
+  padding: 4px 8px; border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+.b-flip .b-label { left: auto; right: 9px; }
+
+.b-code {
+  position: absolute; margin: 0; box-sizing: border-box;
+  padding: 6px 8px; font: 11px/15px var(--b-mono); color: var(--ink, #2B2622);
+  background: var(--card, #fff);
+  background: color-mix(in srgb, var(--card, #fff) 86%, transparent);
+  border: 1px solid var(--line, #EDE6DD); border-left: 2px solid var(--b-c);
+  border-radius: 8px; white-space: pre; overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+  transition: opacity .25s ease;
+}
+.b-code::after {
+  content: ""; display: inline-block; width: 6px; height: 12px; margin-left: 1px;
+  vertical-align: -2px; background: var(--b-c); animation: b-blink .9s steps(1) infinite;
+}
+.b-code.b-gone { opacity: 0; }
+
+.b-sel {
+  position: absolute; box-sizing: border-box; border: 1.5px solid var(--b-c); border-radius: 4px;
+  opacity: 0; animation: b-flash .9s ease-out forwards;
+}
+.b-size {
+  position: absolute; left: -1.5px; top: -19px; white-space: nowrap;
+  background: var(--b-c); color: #fff; font: 600 10px/1 var(--b-mono);
+  padding: 3px 5px; border-radius: 4px;
+}
+.b-ruler {
+  position: absolute; box-sizing: border-box; border-top: 1px solid var(--b-c); opacity: .85;
+  background: repeating-linear-gradient(90deg, var(--b-c) 0 1px, transparent 1px 10px);
+  transition: opacity .3s ease;
+}
+.b-guide { position: absolute; width: 0; border-left: 1px dashed var(--b-c); transition: opacity .3s ease; }
+.b-gap {
+  position: absolute; transform: translate(-50%, -50%);
+  font: 600 10px/1 var(--b-mono); color: var(--b-c);
+  background: var(--bg, #FBF7F2); padding: 2px 3px; border-radius: 3px;
+  transition: opacity .3s ease;
+}
+.b-ruler.b-gone, .b-guide.b-gone, .b-gap.b-gone { opacity: 0; }
+
+.b-you { position: absolute; top: 0; left: 0; opacity: 0; transition: opacity .2s ease; }
+.b-you.b-on { opacity: 1; }
+.b-you .b-label { left: 14px; top: 16px; background: var(--accent, #D9734E); }
+
+.b-skip {
+  position: fixed; pointer-events: auto; cursor: pointer;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: auto; min-width: 64px; min-height: 44px; padding: 0 18px;
+  font: 600 15px/1 var(--b-ui); color: var(--ink, #2B2622);
+  background: var(--card, #fff); border: 1px solid var(--line, #EDE6DD); border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .14);
+}
+.b-skip:focus-visible { outline: 2px solid var(--accent, #D9734E); outline-offset: 2px; }
+
+@keyframes b-spin { to { transform: rotate(360deg); } }
+@keyframes b-blink { 50% { opacity: 0; } }
+@keyframes b-flash { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Safety net: with reduced motion nothing is ever hidden or overlaid. */
+@media (prefers-reduced-motion: reduce) {
+  .b-wait { opacity: 1 !important; }
+  .b-overlay, .b-fixed { display: none !important; }
+}
+
+/* No iOS callout menu on the long-press that starts drag-to-fix */
+[data-b="card"] { -webkit-touch-callout: none; }

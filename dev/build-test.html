@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'">
+<title>Build test</title>
+<link rel="stylesheet" href="../public/build.css">
+<style>
+  :root { --bg:#FBF7F2; --card:#FFFFFF; --ink:#2B2622; --soft:#7A7068; --line:#EDE6DD;
+    --accent:#D9734E; --accent-soft:#FBE9E1; --ok:#4F8A6E; --warn:#C2553A; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1D1A18; --card:#272320; --ink:#F2ECE6; --soft:#A79C92; --line:#38322D;
+      --accent:#E8906E; --accent-soft:#3A2A23; --ok:#7DB89A; --warn:#EE8A70; } }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--ink);
+    font:17px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .bar { position:sticky; top:0; z-index:5; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    padding:8px 16px; background:var(--card); border-bottom:1px solid var(--line); font-size:13px; }
+  .bar button { font:inherit; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  #stat { color:var(--soft); font-variant-numeric:tabular-nums; }
+  main { max-width:560px; margin:0 auto; padding:20px 16px 120px; }
+  h1 { font-size:30px; margin:0; }
+  .date { color:var(--soft); margin:2px 0 18px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin:0 0 14px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--soft); margin:0 0 8px; }
+  .hero { background:var(--accent-soft); border-color:transparent; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .tile { background:var(--bg); border-radius:12px; padding:10px; text-align:center; }
+  .tile b { display:block; font-size:22px; } .tile span { font-size:12px; color:var(--soft); }
+  .card { display:flex; gap:10px; align-items:baseline; padding:10px 12px; margin:8px 0; border:1px solid var(--line);
+    border-radius:12px; background:var(--card); }
+  .when { min-width:52px; color:var(--soft); font-size:14px; }
+  .title { margin:0; } .sub { display:block; font-size:14px; color:var(--soft); }
+  pre, .code { font:13px/1.5 ui-monospace, Menlo, Consolas, monospace; background:var(--bg); border-radius:10px;
+    padding:10px 12px; margin:8px 0 0; overflow:auto; }
+  .code div { white-space:pre; }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .tool { padding:6px 12px; border-radius:999px; background:var(--accent); color:#fff; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="bar"><button type="button" id="rerun">Re-run</button><button type="button" id="fin">finish()</button><span id="stat">…</span></div>
+<main id="dash">
+  <h1 data-b="type">Friday</h1>
+  <p class="date" data-b="type">13 November · 3 meetings, 6 tasks</p>
+  <section class="hero" data-b="box">
+    <h2>Now</h2>
+    <p data-b="type">Deep work block until 11:30. Phone on do-not-disturb.</p>
+  </section>
+  <section data-b="box">
+    <h2>Stats</h2>
+    <div class="stats" data-b="measure">
+      <div class="tile"><b>6</b><span>tasks</span></div>
+      <div class="tile"><b>3</b><span>meetings</span></div>
+      <div class="tile"><b>2h</b><span>focus</span></div>
+      <div class="tile"><b>81%</b><span>done</span></div>
+    </div>
+  </section>
+  <section data-b="box">
+    <h2>Schedule</h2>
+      <div class="card" data-b="card"><span class="when">9:00</span><div><p class="title" data-b="type">Standup with design</p><span class="sub">Room 4 · 15 min</span></div></div>
+      <div class="card" data-b="card"><span class="when">10:00</span><div><p class="title" data-b="type">Ship build animation</p><span class="sub">Due today</span></div></div>
+      <div class="card" data-b="card"><span class="when">11:00</span><div><p class="title" data-b="type">Call the dentist</p><span class="sub">Before 5pm</span></div></div>
+      <div class="card" data-b="card"><span class="when">12:00</span><div><p class="title" data-b="type">Review PR #42</p><span class="sub">Waiting on CI</span></div></div>
+      <div class="card" data-b="card"><span class="when">13:00</span><div><p class="title" data-b="type">Groceries</p><span class="sub">Oat milk, eggs, basil</span></div></div>
+      <div class="card" data-b="card"><span class="when">14:00</span><div><p class="title" data-b="type">Read chapter 7</p><span class="sub">30 min</span></div></div>
+  </section>
+  <div class="tools" data-b="measure">
+    <span class="tool">Mail</span><span class="tool">Calendar</span><span class="tool">GitHub</span><span class="tool">Notes</span><span class="tool">Wiki</span>
+  </div>
+  <section data-b="box">
+    <h2>Code</h2>
+    <pre data-b="code">const today = new Date();
+function greet(name) {
+  return `Morning, ${name}`;
+}
+console.log(greet("you"));
+// end of block</pre>
+    <div class="code" data-b="code"><div>import { build } from './build.js';</div><div>build.start(dash, { speed: 1 });</div><div>// every piece wipes in</div><div>build.finish();</div></div>
+  </section>
+  <section data-b="box">
+    <h2>Notes 1</h2>
+    <p data-b="type">Paragraph 1: a slightly longer piece of text so the typed source has to be truncated to fit the 1.4 second typing window, which is about ninety characters.</p>
+    <div class="card" data-b="card"><div><p class="title">Card 1a</p><span class="sub">With a <a href="#x">link</a> and <button type="button">button</button></span></div></div>
+    <div class="card" data-b="card"><div><p class="title">Card 1b</p><span class="sub">Drag me (long-press on touch)</span></div></div>
+  </section>
+  <section data-b="box">
+    <h2>Notes 2</h2>
+    <p data-b="type">Paragraph 2: a slightly longer piece of text so the typed source has to be truncated to fit the 1.4 second typing window, which is about ninety characters.</p>
+    <div class="card" data-b="card"><div><p class="title">Card 2a</p><span class="sub">With a <a href="#x">link</a> and <button type="button">button</button></span></div></div>
+    <div class="card" data-b="card"><div><p class="title">Card 2b</p><span class="sub">Drag me (long-press on touch)</span></div></div>
+  </section>
+  <section data-b="box">
+    <h2>Notes 3</h2>
+    <p data-b="type">Paragraph 3: a slightly longer piece of text so the typed source has to be truncated to fit the 1.4 second typing window, which is about ninety characters.</p>
+    <div class="card" data-b="card"><div><p class="title">Card 3a</p><span class="sub">With a <a href="#x">link</a> and <button type="button">button</button></span></div></div>
+    <div class="card" data-b="card"><div><p class="title">Card 3b</p><span class="sub">Drag me (long-press on touch)</span></div></div>
+  </section>
+  <section data-b="box">
+    <h2>Notes 4</h2>
+    <p data-b="type">Paragraph 4: a slightly longer piece of text so the typed source has to be truncated to fit the 1.4 second typing window, which is about ninety characters.</p>
+    <div class="card" data-b="card"><div><p class="title">Card 4a</p><span class="sub">With a <a href="#x">link</a> and <button type="button">button</button></span></div></div>
+    <div class="card" data-b="card"><div><p class="title">Card 4b</p><span class="sub">Drag me (long-press on touch)</span></div></div>
+  </section>
+  <p data-b="type">Footer: that is everything for today.</p>
+</main>
+<script src="../public/build.js"></script>
+<script src="build-test.js"></script>
+</body>
+</html>
